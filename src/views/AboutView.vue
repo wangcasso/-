@@ -15,7 +15,7 @@
       vid="amapDemo"
       :style="{
         width: '100%',
-        height: '100vh',
+        height: '80vh',
         backgroundColor: 'rgba(0,0,0, 0.5)',
         borderRadius: '6px',
       }"
@@ -52,7 +52,7 @@ export default {
     return {
       amapManager,
       mapTitle: "地图测试",
-      zoom: [18],
+      zoom: [17],
       center: [0, 0],
       mapEvents: {
         init(o) {
@@ -153,28 +153,60 @@ export default {
   methods: {
     addNowPostion(position) {
       // 创建一个 Marker 实例：
-      var marker = new window.AMap.Marker({
+      new window.AMap.Marker({
         position: new window.AMap.LngLat(...position), // 经纬度对象，也可以是经纬度构成的一维数组[116.39, 39.9]
         animation: "AMAP_ANIMATION_DROP",
-        shadow: new window.AMap.Circle({
-          map: this.amapManager.getMap(),
-          center: position,
-          radius: 1000,
-          strokeColor: "#3285ff",
-          strokeOpacity: 1,
-          strokeWeight: 1,
-          strokeStyle: "solid",
-          fillColor: "#3285ff",
-          fillOpacity: "0.1",
-        }),
+
         // title: "北京",
       });
+      var marker = new window.AMap.Circle({
+        map: this.amapManager.getMap(),
+        center: new window.AMap.LngLat(...position),
+        bubble: true,
+        radius: 500,
+        strokeColor: "#3285ff",
+        strokeOpacity: 1,
+        strokeWeight: 1,
+        strokeStyle: "solid",
+        fillColor: "#3285ff",
+        fillOpacity: "0.1",
+      });
+      marker.on("click", this.showInfo);
 
       // 将创建的点标记添加到已有的地图实例：
       amapManager.getMap().add(marker);
 
       // 移除已创建的 marker
       // amapManager.remove(marker);
+    },
+    showInfo(e) {
+      var text =
+        "您在 [ " +
+        e.lnglat.getLng() +
+        "," +
+        e.lnglat.getLat() +
+        " ] 的位置点击了marker！";
+      console.log(text);
+      // let that = this;
+      window.AMap.plugin(["AMap.PlaceSearch"], function () {
+        //构造地点查询类
+        var placeSearch = new window.AMap.PlaceSearch({
+          type: "汽车服务|汽车销售|汽车维修|摩托车服务|餐饮服务|购物服务|生活服务|体育休闲服务|医疗保健服务|住宿服务|风景名胜|商务住宅|政府机构及社会团体|科教文化服务|交通设施服务|金融保险服务|公司企业|道路附属设施|地名地址信息|公共设施", // 兴趣点类别
+          pageSize: 50, // 单页显示结果条数
+          pageIndex: 1, // 页码
+          // city: "010", // 兴趣点城市
+          // citylimit: true,  //是否强制限制在设置的城市内搜索
+          // map: that.amapManager.getMap(),
+          // panel: "panel", // 结果列表将在此容器中进行展示。
+          autoFitView: false, // 是否自动调整地图视野使绘制的 Marker点都处于视口的可见范围
+        });
+        // https://lbs.amap.com/demo/jsapi-v2/example/poi-search/keywords-search
+
+        var cpoint = [e.lnglat.getLng(), e.lnglat.getLat()]; //中心点坐标
+        placeSearch.searchNearBy("", cpoint, 200, function (status, result) {
+          console.log(status, result);
+        });
+      });
     },
   },
 };
