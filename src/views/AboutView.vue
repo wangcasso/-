@@ -63,6 +63,7 @@
         height: listH + 'vh',
       }"
       :class="{ moreBtn: listH > 50 }"
+      v-if="MAP"
     >
       <div class="searchBar">
         <div
@@ -94,7 +95,7 @@
         class="scrollBox"
         ref="scrollBoxDom"
         :style="{
-          height: 'calc(' + listH + 'vh - 46px' + ')',
+          height: 'calc(' + listH + 'vh - ' + listH < 50 ? '46px' : '96' + ')',
         }"
         @touchstart="touchStart"
         @touchmove="touchMove"
@@ -118,9 +119,10 @@
           </div>
           <div class="selected" v-show="selectJudgment(item, index)">√</div>
         </div>
-        <div class="tip" v-show="loadStatus && !cancelBtnShow">
+        <div class="tip" v-show="loadStatus === 'noMore'">
           {{ tipObj[loadStatus] }}
         </div>
+        <div class="empty" v-show="loadStatus === 'empty'">查询不到数据</div>
       </div>
     </div>
   </div>
@@ -219,26 +221,31 @@ export default {
 
               function onError(data) {
                 console.log("🚀定位失败 ~ data:", data);
+                if (window.confirm("定位失败,请开启定位功能后重试")) {
+                  window.location.reload();
+                } else {
+                  this.$router.back();
+                }
                 // new window.AMap.Map("container", {
                 //   resizeEnable: true,
                 // });
-                window.AMap.plugin("AMap.CitySearch", function () {
-                  var citySearch = new window.AMap.CitySearch();
-                  citySearch.getLocalCity(function (status, result) {
-                    if (status === "complete" && result.info === "OK") {
-                      self.center = [
-                        result.bounds.getCenter().lng,
-                        result.bounds.getCenter().lat,
-                      ];
+                // window.AMap.plugin("AMap.CitySearch", function () {
+                //   var citySearch = new window.AMap.CitySearch();
+                //   citySearch.getLocalCity(function (status, result) {
+                //     if (status === "complete" && result.info === "OK") {
+                //       self.center = [
+                //         result.bounds.getCenter().lng,
+                //         result.bounds.getCenter().lat,
+                //       ];
 
-                      console.log(
-                        "🚀 ~ file: AboutView.vue:96 ~ result:",
-                        result.bounds.getCenter()
-                      );
-                      // 查询成功，result即为当前所在城市信息
-                    }
-                  });
-                });
+                //       console.log(
+                //         "🚀 ~ file: AboutView.vue:96 ~ result:",
+                //         result.bounds.getCenter()
+                //       );
+                //       // 查询成功，result即为当前所在城市信息
+                //     }
+                //   });
+                // });
               }
             });
           }
@@ -454,8 +461,6 @@ export default {
         this.pageIndex = 1;
         this.aroundList = [];
         this.cacheList = [];
-        // this.cacheParam = {};
-        // this.queryStatus = "complete";
         this.loadStatus = "";
       }
       // this.selectedIndex = "";
@@ -679,6 +684,11 @@ export default {
 </script>
 
 <style>
+.amap-logo,
+.amap-copyright {
+  /* display: none; */
+  opacity: 0;
+}
 .header {
   pointer-events: none;
   background: linear-gradient(180deg, #000000bf, transparent);
@@ -782,6 +792,13 @@ div {
 }
 .tip {
   text-align: center;
+}
+.empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .listItem .name {
   overflow: hidden;
