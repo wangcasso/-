@@ -1,5 +1,12 @@
 <template>
-  <div class="likeWeChatMap">
+  <div>
+    <!-- <div
+      class="mark"
+      @touch.stop.prevent
+      @click.stop.prevent
+      v-show="loading"
+    ></div> -->
+    <!-- <div class="text">{{ mapTitle }}</div> -->
     <div class="header">
       <div class="back" @click.stop.prevent="backFn">取消</div>
       <div
@@ -17,15 +24,16 @@
       :zoom="zoom"
       :expandZoomRange="true"
       :center="center"
-      :zoomEnable="true"
+      :zoomEnable="false"
       :dragEnable="true"
-      :touchZoom="true"
+      :touchZoom="false"
       :scrollWheel="true"
       vid="amapDemo"
       :style="{
         width: '100%',
         height: 100 - listH + 'vh',
         backgroundColor: 'rgba(0,0,0, 0.5)',
+        borderRadius: '6px',
       }"
     >
       <!-- <el-amap-marker /> -->
@@ -48,11 +56,6 @@
         图标
       /> -->
     </el-amap>
-    <div
-      class="vh70"
-      :style="{ height: 100 - listH + 'vh' }"
-      v-show="!isInit"
-    ></div>
 
     <div
       id="listBox"
@@ -60,17 +63,9 @@
         height: listH + 'vh',
       }"
       :class="{ moreBtn: listH > 50 }"
+      v-if="MAP"
     >
-      <div
-        class="mark"
-        :style="{ position: darkMarkFullScreen && 'fixed' }"
-        @touch.stop.prevent
-        @click.stop.prevent
-        v-show="loading"
-      >
-        <div class="rollImg"></div>
-      </div>
-      <div class="searchBar" :class="{ noArrow: listH < 50 }">
+      <div class="searchBar">
         <div
           v-show="listH > 50"
           class="downArrow"
@@ -79,12 +74,13 @@
               listH = listPercentage;
             }
           "
-        ></div>
+        >
+          V
+        </div>
         <div class="inputDom">
           <input
             type="search"
             class="searchWindow"
-            :class="{ noRightMargin: cancelBtnShow }"
             v-model.trim="searchValue"
             placeholder="搜索地点"
             @focus="searchFocusFn"
@@ -113,43 +109,26 @@
           <div v-if="item.id">
             <div class="name" v-html="item.name"></div>
             <div class="dAndA">
-              <span class="distanceCss">{{ item.distance }}m</span> |
+              <span class="distanceCss">{{ item.distance }}米</span>|
               <span class="addressCss">{{ item.address }}</span>
             </div>
           </div>
-          <div v-else-if="item.info === 'SUCCESS'">
-            <div class="myPosition">我的位置</div>
-            <div class="name">{{ item.formattedAddress || item.address }}</div>
+          <div v-else>
+            <div>当前定位</div>
+            <div class="name" v-html="item.formattedAddress"></div>
           </div>
-          <div v-else-if="item.adcode">
-            <div class="myPosition">坐标位置</div>
-            <div class="name">{{ item.formattedAddress }}</div>
-            <!-- <div class="dAndA">
-              <span class="distanceCss">{{ item.distance }}m</span> |
-              <span class="addressCss">{{ item.formattedAddress }}</span>
-            </div> -->
-          </div>
-          <div class="selected" v-show="selectJudgment(item, index)"></div>
+          <div class="selected" v-show="selectJudgment(item, index)">√</div>
         </div>
-        <div
-          class="tip"
-          v-show="loadStatus === 'noMore' && aroundList.length > 0"
-        >
+        <div class="tip" v-show="loadStatus === 'noMore'">
           {{ tipObj[loadStatus] }}
         </div>
-        <div class="empty" v-show="loadStatus === 'empty'">
-          <span>抱歉，您搜索的地址超出规定范围或不存在</span>
-        </div>
+        <div class="empty" v-show="loadStatus === 'empty'">查询不到数据</div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { AMapManager } from "vue-amap";
-// import native from 'src/servers/native';
-let native = {};
-let AMap = window.AMap;
 function getDirection(x, y) {
   if (x > y) {
     return "horizontal";
@@ -162,14 +141,15 @@ function getDirection(x, y) {
   return "";
 }
 
+import { AMapManager } from "vue-amap";
 const amapManager = new AMapManager();
 export default {
   data() {
     const self = this;
-
     return {
-      // vueImg: require("src/images/position.png"),
+      vueImg: require("./../assets/p.png"),
       amapManager,
+      mapTitle: "地图测试",
       zoom: [16],
       center: [0, 0],
       nowLocal: {},
@@ -177,39 +157,44 @@ export default {
       lastPoint: {},
       selectedIndex: 0,
       MAP: null,
-      isInit: false,
       tipObj: {
-        empty: "抱歉，您搜索的地址超出规定范围或不存在",
+        empty: "抱歉,您搜索的地址超出规定范围或不存在",
         noMore: "——暂无更多地点信息——",
       },
       loadStatus: "",
       mapEvents: {
         init(o) {
-          let AMap = window.AMap;
-
-          self.isInit = true;
           console.log("🚀 ~ file: AboutView.vue:54 ~ init ~ o:", o);
 
           if (!self.MAP) {
             self.loading = true;
 
-            amapManager.getMap().plugin("AMap.Geolocation", () => {
-              const geolocation = new AMap.Geolocation({
+            amapManager.getMap().plugin("AMap.Geolocation", function () {
+              var geolocation = new window.AMap.Geolocation({
                 // 是否使用高精度定位，默认：true
                 enableHighAccuracy: true,
                 // 设置定位超时时间，默认：无穷大
                 timeout: 10000,
                 // 定位按钮的停靠位置的偏移量，默认：Pixel(10, 20)
-                buttonOffset: new AMap.Pixel(16, 16),
+                buttonOffset: new window.AMap.Pixel(20, 20),
                 //  定位成功后调整地图视野范围使定位位置及精度范围视野内可见，默认：false
                 // zoomToAccuracy: true,
                 //  定位按钮的排放位置,  RB表示右下
-                showCircle: false, // 定位成功后用圆圈表示定位精度范围，默认：true
-                showButton: true, // 显示定位按钮，默认：true
+                showCircle: false, //定位成功后用圆圈表示定位精度范围，默认：true
+                showButton: true, //显示定位按钮，默认：true
                 buttonPosition: "LB",
                 GeoLocationFirst: true,
               });
+
               amapManager.getMap().addControl(geolocation);
+
+              geolocation.getCurrentPosition();
+              window.AMap.event.addListener(
+                geolocation,
+                "complete",
+                onComplete
+              );
+              window.AMap.event.addListener(geolocation, "error", onError);
 
               function onComplete(data) {
                 console.log("🚀 定位成功 data:", data);
@@ -230,70 +215,45 @@ export default {
                       self.loading = true;
                     });
                 }
+                self.listH = self.listPercentage;
 
                 self.searchNearLocal({ keyWord: "", init: 1 });
               }
 
               function onError(data) {
-                console.log("🚀地图定位失败 ~ data:", data);
-                window.getLocationCallBack = (res) => {
-                  console.log("🚀 ~ file: index.vue:222 ~ onError ~ res:", res);
-                  if (res && res.returnMsg === "success") {
-                    self.center = [res.Longitude, res.Latitude];
-                    self.lastPoint = [res.Longitude, res.Latitude];
-                    self.addCenterMarker(self.center);
-                    self.addClickMarker(self.center);
-
-                    self.nowLocal = res;
-                    self.lastAddress = res;
-                    self.addNowPostion(self.center);
-                    if (!self.MAP) {
-                      self.MAP = self.amapManager.getMap(); // 获取地图组件实例
-                      const timer = setInterval(() => {
-                        if (window.document.querySelector(".amap-geo")) {
-                          window.document
-                            .querySelector(".amap-geo")
-                            .addEventListener("click", () => {
-                              self.searchValue = "";
-                              self.loading = true;
-                              self.darkMarkFullScreen = true;
-                            });
-                          clearInterval(timer);
-                        }
-                      }, 500);
-                    }
-                    self.listH = self.listPercentage;
-
-                    self.searchNearLocal({ keyWord: "", init: 1 });
-                  }
-                };
-                if (window.$native) {
-                  console.log("尝试使用赢家原生定位");
-                  window.$native.genPromise(
-                    window.$native.genArgs(
-                      { functionName: "getLocationCallBack" },
-                      "startPositioning",
-                      ""
-                    ),
-                    "startPositioning"
-                  );
+                console.log("🚀定位失败 ~ data:", data);
+                if (window.confirm("定位失败,请开启定位功能后重试")) {
+                  window.location.reload();
+                } else {
+                  this.$router.back();
                 }
+                // new window.AMap.Map("container", {
+                //   resizeEnable: true,
+                // });
+                // window.AMap.plugin("AMap.CitySearch", function () {
+                //   var citySearch = new window.AMap.CitySearch();
+                //   citySearch.getLocalCity(function (status, result) {
+                //     if (status === "complete" && result.info === "OK") {
+                //       self.center = [
+                //         result.bounds.getCenter().lng,
+                //         result.bounds.getCenter().lat,
+                //       ];
 
-                // if (window.confirm('定位失败,请开启定位功能后重试')) {
-                //   window.location.reload();
-                // } else {
-                //   this.$router.back();
-                // }
+                //       console.log(
+                //         "🚀 ~ file: AboutView.vue:96 ~ result:",
+                //         result.bounds.getCenter()
+                //       );
+                //       // 查询成功，result即为当前所在城市信息
+                //     }
+                //   });
+                // });
               }
-              geolocation.getCurrentPosition();
-              AMap.event.addListener(geolocation, "complete", onComplete);
-              AMap.event.addListener(geolocation, "error", onError);
             });
           }
         },
         complete() {
           console.log(
-            "🚀 ~ file: AboutView.vue:274 ~ complete ~ MAP:",
+            "🚀 ~ file: AboutView.vue:74 ~ complete ~ MAP:",
             this.MAP
           );
           // self.amapManager.getMap().setStatus({
@@ -309,7 +269,7 @@ export default {
           self.listH = self.listPercentage;
         },
         zoomchange: (e) => {
-          console.log("🚀 ~ file: AboutView.vue:290 ~ data ~ e:", e);
+          console.log("🚀 ~ file: AboutView.vue:83 ~ data ~ e:", e);
           const zoom = self.amapManager.getMap().getZoom(); // 获取当前地图级别
           console.log(zoom);
           // if (zoom <= 11 && self.mType === 2) {
@@ -321,45 +281,12 @@ export default {
         //   console.log("map clicked");
         // },
       },
-      blueCircle: "", // 范围实例
-      placeSearch: {}, // 搜索实例
+      blueCircle: "", //范围实例
+      placeSearch: {}, //搜索实例
       pageIndex: 1,
-      cacheList: [], // 连续请求缓存数组
-      aroundList: [
-        // {
-        //   id: 'B0FFF4N4QE',
-        //   name: '信息科技中心',
-        //   type: '商务住宅;楼宇;商务写字楼',
-        //   location: {
-        //     Q: 22.508033,
-        //     R: 114.04573700000003,
-        //     lng: 114.045737,
-        //     lat: 22.508033,
-        //   },
-        //   address: '市花路16号',
-        //   tel: '',
-        //   distance: 48,
-        //   shopinfo: '0',
-        //   toCenterDistance: 48.404689396374486,
-        // },
-        // {
-        //   id: 'B0FFL1RU1M',
-        //   name: '广东信息科技中心深发展信息科技大楼',
-        //   type: '商务住宅;楼宇;商务写字楼',
-        //   location: {
-        //     Q: 22.507815,
-        //     R: 114.04581400000001,
-        //     lng: 114.045814,
-        //     lat: 22.507815,
-        //   },
-        //   address: '市花路与平冠道交叉口西北80米',
-        //   tel: '',
-        //   distance: 51,
-        //   shopinfo: '0',
-        //   toCenterDistance: 51.316004048558796,
-        // },
-      ], // 最终展示地址数组
-      cancelList: [], // 取消时恢复的列表
+      cacheList: [], //连续请求缓存数组
+      aroundList: [], //最终展示地址数组
+      cancelList: [], //取消时恢复的列表
       markerList: [],
       markerInfoList: [],
       cancelBtnShow: false,
@@ -369,8 +296,8 @@ export default {
       searchValue: "",
       timer: 0,
       listPercentage: 30,
-      listH: 30,
-      loading: true,
+      listH: this.listPercentage,
+      loading: false,
       // queryStatus: "complete",
       // cacheParam: {},
       // lockForchangeH: false,
@@ -379,13 +306,11 @@ export default {
       deltaY: 0,
       offsetX: 0,
       offsetY: 0,
-      centerMaker: "",
-      darkMarkFullScreen: false,
     };
   },
   watch: {
     searchValue: {
-      handler(newV) {
+      handler: function (newV) {
         if (newV) {
           clearTimeout(this.timer);
           this.timer = setTimeout(() => {
@@ -400,26 +325,17 @@ export default {
       },
     },
     lastAddress: {
-      handler(newV) {
+      handler: function (newV) {
         console.log(newV);
         if (newV === "" && this.clickMaker) {
           this.clickMaker.hide();
         }
       },
     },
-    listH: {
-      handler(newV, oldV) {
-        if (newV < 50 && oldV > 50 && this.loadStatus === "empty") {
-          this.cancelFn();
-          this.loadStatus = "";
-        }
-      },
-    },
   },
   methods: {
     backFn() {
-      // this.$router.back();
-      native.$closeWindow();
+      this.$router.back();
     },
     isSelect() {
       if (
@@ -427,37 +343,25 @@ export default {
         this.aroundList[this.selectedIndex] &&
         this.aroundList[this.selectedIndex].formattedAddress ===
           this.lastAddress.formattedAddress
-      ) {
+      )
         return true;
-      }
-      return false;
     },
     doneFn() {
       if (!this.isSelect()) return;
-      native.$injectNativeEventPara(
-        JSON.stringify({ type: "1", para: this.lastAddress })
+      alert(
+        "选择了" + (this.lastAddress.formattedAddress || this.lastAddress.name)
       );
-      // console.log(
-      //   '选择了',
-      //   this.lastAddress.formattedAddress,
-      //   this.lastAddress,
-      // );
-      native.$closeWindow();
     },
     selectJudgment(item, index) {
-      if (!item.formattedAddress && item.pname) {
+      if (!item.formattedAddress) {
         item.formattedAddress =
           item.pname + item.cityname + item.adname + item.address + item.name;
-      } else if (!item.formattedAddress) {
-        item.formattedAddress = item.address;
       }
       if (
         this.selectedIndex === index &&
         item.formattedAddress === this.lastAddress.formattedAddress
-      ) {
+      )
         return true;
-      }
-      return false;
     },
     touchStart: function touchStart(event) {
       this.resetTouchStatus();
@@ -466,14 +370,14 @@ export default {
     },
     touchMove: function touchMove(event) {
       // console.log(this.$refs.scrollBoxDom);
-      const touch = event.touches[0]; // safari back will set clientX to negative number
+      var touch = event.touches[0]; // safari back will set clientX to negative number
 
       this.deltaX = touch.clientX < 0 ? 0 : touch.clientX - this.startX;
       this.deltaY = touch.clientY - this.startY;
       this.offsetX = Math.abs(this.deltaX);
-      this.offsetY = Math.abs(this.deltaY);
+      this.offsetY = Math.abs(this.deltaY); // lock direction when distance is greater than a certain value
 
-      const LOCK_DIRECTION_DISTANCE = 10;
+      var LOCK_DIRECTION_DISTANCE = 10;
 
       if (
         !this.direction ||
@@ -504,16 +408,15 @@ export default {
     },
     addNowPostion(position) {
       // 创建一个 Marker 实例：
-      // new AMap.Marker({
-      //   position: new AMap.LngLat(...position), // 经纬度对象，也可以是经纬度构成的一维数组[116.39, 39.9]
-      //   animation: 'AMAP_ANIMATION_DROP',
+      // new window.AMap.Marker({
+      //   position: new window.AMap.LngLat(...position), // 经纬度对象，也可以是经纬度构成的一维数组[116.39, 39.9]
+      //   animation: "AMAP_ANIMATION_DROP",
       //   // title: "北京",
       // });
-      let AMap = window.AMap;
       if (!this.blueCircle) {
-        this.blueCircle = new AMap.Circle({
+        this.blueCircle = new window.AMap.Circle({
           map: this.amapManager.getMap(),
-          center: new AMap.LngLat(...position),
+          center: new window.AMap.LngLat(...position),
           bubble: true,
           radius: 500,
           strokeColor: "#3285ff",
@@ -531,11 +434,16 @@ export default {
         // 移除已创建的 marker
         // amapManager.remove(marker);
       } else {
-        this.blueCircle.setCenter(new AMap.LngLat(...position));
+        this.blueCircle.setCenter(new window.AMap.LngLat(...position));
       }
     },
     showInfo(e) {
-      const text = `您在 [ ${e.lnglat.getLng()},${e.lnglat.getLat()} ] 的位置点击了marker！`;
+      var text =
+        "您在 [ " +
+        e.lnglat.getLng() +
+        "," +
+        e.lnglat.getLat() +
+        " ] 的位置点击了marker！";
       console.log(text);
       // let that = this;
       this.addClickMarker([e.lnglat.getLng(), e.lnglat.getLat()]);
@@ -543,29 +451,23 @@ export default {
       this.searchValue = "";
       this.lastPoint = [e.lnglat.getLng(), e.lnglat.getLat()];
 
-      var geocoder = new window.AMap.Geocoder();
-      let that = this;
-      that.searchNearLocal({
+      this.searchNearLocal({
         keyWord: "",
         point: [e.lnglat.getLng(), e.lnglat.getLat()],
         init: 1,
-        from: "click",
       });
+
+      var geocoder = new window.AMap.Geocoder({
+        // city: "010", //城市设为北京，默认：“全国”
+        radius: 500, //范围，默认：500
+      });
+
       geocoder.getAddress(
         [e.lnglat.getLng(), e.lnglat.getLat()],
         function (status, result) {
           console.log(status, result);
           if (status === "complete" && result.regeocode) {
             console.log(status, result);
-            that.nowLocal = {}; //result.regeocode
-            that.nowLocal.adcode = 1;
-            that.nowLocal.formattedAddress = result.regeocode.formattedAddress;
-            // that.nowLocal.location = [e.lnglat.getLng(), e.lnglat.getLat()];
-
-            // that.nowLocal.distance = AMap.GeometryUtil.distance(
-            //         that.center,
-            //         [e.lnglat.getLng(), e.lnglat.getLat()]
-            //       ).toFixed();
             // var address = result.regeocode.formattedAddress;
             // document.getElementById("address").value = address;
           } else {
@@ -573,8 +475,9 @@ export default {
           }
         }
       );
+      // }
     },
-    searchNearLocal({ keyWord, point, init, from }) {
+    searchNearLocal({ keyWord, point, init }) {
       // if (this.queryStatus !== "complete") {
       //   this.cacheParam = { keyWord, point, init };
       //   return;
@@ -586,12 +489,10 @@ export default {
         this.loadStatus = "";
       }
       // this.selectedIndex = "";
-      const that = this;
-      let AMap = window.AMap;
-
-      AMap.plugin(["AMap.PlaceSearch"], () => {
-        // 构造地点查询类
-        that.placeSearch = new AMap.PlaceSearch({
+      let that = this;
+      window.AMap.plugin(["AMap.PlaceSearch"], function () {
+        //构造地点查询类
+        that.placeSearch = new window.AMap.PlaceSearch({
           // type: "商务住宅", // 兴趣点类别
           type: "汽车服务|汽车销售|汽车维修|摩托车服务|餐饮服务|购物服务|生活服务|体育休闲服务|医疗保健服务|住宿服务|风景名胜|商务住宅|政府机构及社会团体|科教文化服务|交通设施服务|金融保险服务|公司企业|道路附属设施|地名地址信息|公共设施",
           pageSize: 50, // 单页显示结果条数
@@ -605,16 +506,16 @@ export default {
         });
         // https://lbs.amap.com/demo/jsapi-v2/example/poi-search/keywords-search
 
-        const cpoint = point || that.center;
-        const radio = point
+        var cpoint = point ? point : that.center;
+        let radio = point
           ? that.clickRadius
-          : that.centerRadius; /* [e.lnglat.getLng(), e.lnglat.getLat()]; */ // 中心点坐标
+          : that.centerRadius; /* [e.lnglat.getLng(), e.lnglat.getLat()]; */ //中心点坐标
         that.loading = true;
         that.placeSearch.searchNearBy(
           keyWord,
           cpoint,
           radio,
-          (status, result) => {
+          function (status, result) {
             console.log(status, that.pageIndex, result);
             // that.queryStatus = status;
             // console.log(that.queryStatus);
@@ -632,7 +533,7 @@ export default {
               }
               that.cacheList.push(...result.poiList.pois);
               ++that.pageIndex;
-              that.searchNearLocal({ keyWord, point, from });
+              that.searchNearLocal({ keyWord, point });
             } else {
               if (that.cacheList.length > 0) {
                 that.loadStatus = "noMore";
@@ -654,20 +555,15 @@ export default {
               );
               if (point) {
                 that.aroundList.forEach((ele) => {
-                  ele.distance = AMap.GeometryUtil.distance(
+                  ele.distance = window.AMap.GeometryUtil.distance(
                     that.center,
                     ele.location
                   ).toFixed();
                 });
-                that.aroundList = that.aroundList.sort(
-                  (a, b) => a.distance - b.distance
-                );
+                that.aroundList = that.aroundList.sort((a, b) => {
+                  return a.distance - b.distance;
+                });
                 that.lastAddress = that.aroundList[0];
-              }
-              if (from === "click") {
-                that.cacheList.unshift(that.nowLocal);
-                that.lastAddress = that.nowLocal;
-                that.selectedIndex = 0;
               }
 
               if (keyWord) {
@@ -690,9 +586,7 @@ export default {
               } else {
                 that.cancelList = that.aroundList;
               }
-
               that.loading = false;
-              that.darkMarkFullScreen = false;
 
               // that.addMarkerList();//地图标记
             }
@@ -713,18 +607,18 @@ export default {
     },
     addMarkerList() {
       // 批量标记
-      const that = this;
+      let that = this;
       function createContent(poi) {
-        // 信息窗体内容
-        const s = [];
-        s.push(`<b>名称：${poi.name}</b>`);
-        s.push(`地址：${poi.address}`);
-        s.push(`电话：${poi.tel}`);
-        s.push(`类型：${poi.type}`);
+        //信息窗体内容
+        var s = [];
+        s.push("<b>名称：" + poi.name + "</b>");
+        s.push("地址：" + poi.address);
+        s.push("电话：" + poi.tel);
+        s.push("类型：" + poi.type);
         return s.join("<br>");
       }
       this.aroundList.forEach((item, index) => {
-        this.markerList[index] = new AMap.Marker({
+        this.markerList[index] = new window.AMap.Marker({
           map: that.amapManager.getMap(),
           position: item.location,
           // icon:
@@ -739,7 +633,7 @@ export default {
           );
           console.log(item);
         });
-        this.markerInfoList[index] = new AMap.InfoWindow({
+        this.markerInfoList[index] = new window.AMap.InfoWindow({
           autoMove: true,
           offset: { x: 0, y: -30 },
         });
@@ -748,65 +642,29 @@ export default {
     },
     addClickMarker(position) {
       console.log("点标记执行");
-      const that = this;
-      let AMap = window.AMap;
-
+      let that = this;
       if (!this.clickMaker) {
-        this.clickMaker = new AMap.Marker({
+        this.clickMaker = new window.AMap.Marker({
           map: that.amapManager.getMap(),
-          position: new AMap.LngLat(...position),
+          position: new window.AMap.LngLat(...position),
           animation: "AMAP_ANIMATION_DROP",
-          offset: new AMap.Pixel(-15, -48),
-          zindex: 103,
-          icon: new AMap.Icon({
-            size: new AMap.Size(31, 50),
-            imageSize: new AMap.Size(31, 50),
-            // image: that.vueImg,
-            // imageOffset: new AMap.Pixel(-9, -3),
+          offset: new window.AMap.Pixel(-15, -48),
+          bubble: true,
+          icon: new window.AMap.Icon({
+            size: new window.AMap.Size(31, 50),
+            // imageOffset: new window.AMap.Pixel(-9, -3),
+            imageSize: new window.AMap.Size(31, 50),
+            image: that.vueImg,
           }),
         });
-        // const timer = setInterval(() => {
-        //   if (
-        //     window.document.querySelectorAll('.amap-marker').length > 0
-        //   ) {
-        //     const domList = window.document.querySelectorAll('.amap-marker');
-        //     domList.forEach((ele) => {
-        //       ele.style.pointerEvents = 'none';
-        //     });
-        //     clearInterval(timer);
-        //   }
-        // }, 500);
       } else {
         this.clickMaker.show();
         console.log(this.clickMaker);
-        this.clickMaker.moveTo(new AMap.LngLat(...position), 3600);
-      }
-    },
-    addCenterMarker(position) {
-      console.log("原生中心定位");
-      const that = this;
-      if (!this.centerMaker) {
-        this.centerMaker = new AMap.Marker({
-          map: that.amapManager.getMap(),
-          position: new AMap.LngLat(...position),
-          // animation: 'AMAP_ANIMATION_DROP',
-          zindex: 102,
-          offset: new AMap.Pixel(-11, -11),
-          icon: new AMap.Icon({
-            size: new AMap.Size(23, 23),
-            imageSize: new AMap.Size(23, 23),
-            image: "https://webapi.amap.com/theme/v1.3/markers/b/loc.png",
-            // imageOffset: new AMap.Pixel(-9, -3),
-          }),
-        });
-      } else {
-        // this.clickMaker.show();
-        // console.log(this.clickMaker);
-        this.centerMaker.moveTo(new AMap.LngLat(...position), 3600);
+        this.clickMaker.moveTo(new window.AMap.LngLat(...position), 3600);
       }
     },
     listClick(item, index) {
-      console.log("🚀 ~ file: AboutView.vue:707 ~ listClick ~ item:", item);
+      console.log("🚀 ~ file: AboutView.vue:584 ~ listClick ~ item:", item);
       this.selectedIndex = index;
       this.lastAddress = item;
       this.clickMaker.moveTo(item.position || item.location, 3600);
@@ -857,25 +715,15 @@ export default {
 };
 </script>
 
-<style >
-.likeWeChatMap .amap-marker {
-  pointer-events: none;
-}
-</style>
-
-<style lang="less">
+<style>
 .amap-logo,
 .amap-copyright {
   /* display: none; */
   opacity: 0;
 }
 .header {
-  font-family: PingFangSC-Regular;
-  font-size: 16px;
-  color: #ffffff;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.749), transparent);
-  height: 80px;
+  background: linear-gradient(180deg, #000000bf, transparent);
   position: fixed;
   z-index: 999;
   top: 0;
@@ -884,22 +732,19 @@ export default {
   height: 45px;
   display: flex;
   justify-content: space-between;
-  div {
-    /* padding: 8px; */
-    text-align: center;
-    height: 30px;
-    line-height: 30px;
-    width: 54px;
-    pointer-events: all;
-    margin: 0 15px;
-  }
-  .back {
-    color: #fff;
-  }
-  .done {
-    background: #ff5601;
-    border-radius: 4px;
-  }
+  font-size: 18px;
+}
+.header div {
+  padding: 8px;
+  height: 22px;
+  pointer-events: all;
+  margin: 0 8px;
+}
+.back {
+  color: #fff;
+}
+.done {
+  background: greenyellow;
 }
 .dont {
   opacity: 0.3;
@@ -917,33 +762,7 @@ div {
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
-  background: #ffffff;
-  .mark {
-    position: absolute;
-    z-index: 10000;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.3);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    @keyframes rotate {
-      0% {
-        transform: rotate(360deg);
-      }
-      100% {
-        transform: rotate(0deg);
-      }
-    }
-    .rollImg {
-      width: 30px;
-      height: 30px;
-      // background: url("~images/loading.png") no-repeat center center/30px;
-      animation: rotate 1s linear infinite;
-    }
-  }
+  background: #fff;
 }
 #listBox.moreBtn {
   padding-top: 96px;
@@ -961,144 +780,82 @@ div {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  &.noArrow {
-    padding-top: 16px;
-    // &::after{
-    //   content: '';
-    //   width: 100%;
-    //   height:16px;
-    //   position: absolute;
-    //   top:-16px;
-    //   left: 0;
-    //   border-radius: 12px 12px 0 0;
-    //   background: #fff;
-    // }
-  }
-  .downArrow {
-    width: 50px;
-    height: 50px;
-    // background: url("~images/downArrowForMap.png") no-repeat center center/25px;
-
-    // font-size: 30px;
-    // text-align: center;
-    // line-height: 50px;
-  }
-  .inputDom {
-    display: flex;
-    width: 100%;
-    justify-content: center;
-    align-items: center;
-    .searchWindow {
-      margin: 0px 8px;
-      // width: 100%;
-      flex: 1;
-      height: 34px;
-      // background: #f7f7f7;
-      border-radius: 17px;
-      border: none;
-      text-align: center;
-      text-indent: -23px;
-      // background: #f7f7f7 url("~images/search.png") no-repeat 145px center/14px;
-      padding-left: 34px;
-      caret-color: #ff5601;
-      &.noRightMargin {
-        margin-right: 0;
-        // background: #f7f7f7 url("~images/search.png") no-repeat 16px center/14px;
-        text-indent: 0px;
-        text-align: left;
-      }
-      &::-webkit-search-decoration {
-        display: none;
-      }
-    }
-    input[type="search"]::-webkit-search-cancel-button {
-      display: none;
-    }
-
-    input[type="search"]::-webkit-input-placeholder {
-      position: relative;
-      font-family: PingFangSC-Regular;
-      font-size: 12px;
-      color: #999999;
-    }
-    .cancelBtn {
-      white-space: nowrap;
-      font-family: PingFangSC-Regular;
-      font-size: 15px;
-      color: #1f52f9;
-      width: 50px;
-      padding: 8px;
-    }
-  }
 }
+.inputDom {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+}
+.searchWindow {
+  margin: 16px 8px;
+  width: 100%;
+  height: 30px;
+}
+.cancelBtn {
+  width: 45px;
+  padding: 8px;
+}
+.downArrow {
+  width: 50px;
+  height: 50px;
+  background: #eee;
 
+  font-size: 30px;
+  text-align: center;
+  line-height: 50px;
+}
 .scrollBox {
   overflow: scroll;
-  position: relative;
   height: 100%;
-
-  .listItem {
-    height: 77px;
-    border-bottom: 1px #eee solid;
-    padding: 12px 0 0 16px;
-    padding-right: 30px;
-    .name {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      color: #000000;
-      font-size: 16px;
-    }
-    .greenName {
-      color: #ff5601;
-    }
-    .dAndA {
-      margin-top: 4px;
-      font-size: 14px;
-      color: #999999;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-    .myPosition {
-      font-size: 14px;
-      color: #666666;
-      margin-bottom: 4px;
-    }
-    .selected {
-      position: absolute;
-      width: 18px;
-      height: 18px;
-      color: orangered;
-      right: 8px;
-      top: calc(50% - 9px);
-      // background: url("~images/mapSelected.png") no-repeat center center / 18px;
-    }
-  }
-  .empty {
-    width: 100%;
-    height: 300px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    // background: url("~images/newEmpty.png") no-repeat center 47px;
-    background-size: 130px;
-    span {
-      font-family: PingFangSC-Regular;
-      font-size: 15px;
-      color: #999;
-      transform: translateY(37px);
-    }
-  }
-  .tip {
-    margin-top: 8px;
-    font-size: 14px;
-    color: #999999;
-    text-align: center;
-  }
 }
-
-/* @keyframes skeleton-loading {
+.listItem {
+  border-bottom: 1px #eee solid;
+  padding: 8px 4px;
+  position: relative;
+  padding-right: 30px;
+}
+.selected {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  color: orangered;
+  right: 3px;
+  top: 23px;
+}
+.tip {
+  text-align: center;
+}
+.empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.listItem .name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dAndA {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.greenName {
+  color: green;
+}
+.mark {
+  position: fixed;
+  z-index: 10000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+}
+@keyframes skeleton-loading {
   0% {
     background-position: 100% 50%;
   }
@@ -1111,7 +868,7 @@ body {
   background: linear-gradient(-45deg, #f1f2f3 25%, #ffffff 45%, #f1f2f3 65%);
   background-size: 400% 100%;
   animation: skeleton-loading 1.2s ease-in-out infinite;
-} */
+}
 </style>
 <!-- [
     {
