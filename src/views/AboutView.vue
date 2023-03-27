@@ -17,9 +17,9 @@
       :zoom="zoom"
       :expandZoomRange="true"
       :center="center"
-      :zoomEnable="true"
+      :zoomEnable="false"
       :dragEnable="true"
-      :touchZoom="true"
+      :touchZoom="false"
       :scrollWheel="true"
       vid="amapDemo"
       :style="{
@@ -89,6 +89,7 @@
             placeholder="搜索地点"
             @focus="searchFocusFn"
             @blur="searchBlurFn"
+            @input="searchBarFn"
           />
           <div class="cancelBtn" v-show="cancelBtnShow" @click="cancelFn">
             取消
@@ -117,7 +118,9 @@
               <span class="addressCss">{{ item.address }}</span>
             </div>
           </div>
-          <div v-else-if="item.info === 'SUCCESS'">
+          <div
+            v-else-if="item.info === 'SUCCESS' || item.returnMsg === 'success'"
+          >
             <div class="myPosition">我的位置</div>
             <div class="name">{{ item.formattedAddress || item.address }}</div>
           </div>
@@ -183,6 +186,7 @@ export default {
         noMore: "——暂无更多地点信息——",
       },
       loadStatus: "",
+      draggingtimer: 0,
       mapEvents: {
         init(o) {
           let AMap = window.AMap;
@@ -214,57 +218,18 @@ export default {
               function onComplete(data) {
                 console.log("🚀 定位成功 data:", data);
                 // data是具体的定位信息
-                self.center = [data.position.lng, data.position.lat];
-                self.lastPoint = [data.position.lng, data.position.lat];
-                self.addClickMarker(self.center);
-
-                self.nowLocal = data;
-                self.lastAddress = data;
-                self.addNowPostion(self.center);
-                if (!self.MAP) {
-                  self.MAP = self.amapManager.getMap(); // 获取地图组件实例
-                  window.document
-                    .querySelector(".amap-geo")
-                    .addEventListener("click", () => {
-                      self.searchValue = "";
-                      self.loading = true;
-                    });
-                }
-
-                self.searchNearLocal({ keyWord: "", init: 1 });
+                self.afterGetCenter(data);
               }
 
-              function onError(data) {
-                console.log("🚀地图定位失败 ~ data:", data);
-                window.getLocationCallBack = (res) => {
-                  console.log("🚀 ~ file: index.vue:222 ~ onError ~ res:", res);
-                  if (res && res.returnMsg === "success") {
-                    self.center = [res.Longitude, res.Latitude];
-                    self.lastPoint = [res.Longitude, res.Latitude];
-                    self.addCenterMarker(self.center);
-                    self.addClickMarker(self.center);
-
-                    self.nowLocal = res;
-                    self.lastAddress = res;
-                    self.addNowPostion(self.center);
-                    if (!self.MAP) {
-                      self.MAP = self.amapManager.getMap(); // 获取地图组件实例
-                      const timer = setInterval(() => {
-                        if (window.document.querySelector(".amap-geo")) {
-                          window.document
-                            .querySelector(".amap-geo")
-                            .addEventListener("click", () => {
-                              self.searchValue = "";
-                              self.loading = true;
-                              self.darkMarkFullScreen = true;
-                            });
-                          clearInterval(timer);
-                        }
-                      }, 500);
-                    }
-                    self.listH = self.listPercentage;
-
-                    self.searchNearLocal({ keyWord: "", init: 1 });
+              function onError() {
+                console.log("🚀地图定位失败 ~ data:");
+                window.getLocationCallBack = (data) => {
+                  console.log(
+                    "🚀 ~ file: index.vue:222 ~ onError ~ data:",
+                    data
+                  );
+                  if (data && data.returnMsg === "success") {
+                    self.afterGetCenter(data, true);
                   }
                 };
                 if (window.$native) {
@@ -301,8 +266,25 @@ export default {
           // });
         },
         movestart: () => {
-          console.log("map move");
+          // console.log("map move");
+        },
+        dragging: () => {
           self.listH = self.listPercentage;
+
+          if (self.searchValue) return;
+          // self.MAP.getCenter();
+          let position = [self.MAP.getCenter().lng, self.MAP.getCenter().lat];
+          if (self.blueCircle.contains(position)) {
+            self.addClickMarker(position, true);
+            console.log("map dragging", self.MAP && self.MAP.getCenter());
+          } else {
+            clearTimeout(self.draggingtimer);
+            self.draggingtimer = setTimeout(() => {
+              self.MAP.setCenter(this.clickMaker.getPosition());
+            }, 200);
+          }
+
+          // self.listH = self.listPercentage;
         },
         click: () => {
           console.log("map click");
@@ -384,24 +366,24 @@ export default {
     };
   },
   watch: {
-    searchValue: {
-      handler(newV) {
-        if (newV) {
-          clearTimeout(this.timer);
-          this.timer = setTimeout(() => {
-            console.log(newV);
-            this.searchBarFn();
-          }, 500);
-        } else {
-          clearTimeout(this.timer);
-          // this.aroundList = [];
-          // this.loadStatus = "";
-        }
-      },
-    },
+    // searchValue: {
+    //   handler(newV) {
+    //     if (newV) {
+    //       clearTimeout(this.timer);
+    //       this.timer = setTimeout(() => {
+    //         console.log(newV);
+    //         this.searchBarFn();
+    //       }, 500);
+    //     } else {
+    //       clearTimeout(this.timer);
+    //       // this.aroundList = [];
+    //       // this.loadStatus = "";
+    //     }
+    //   },
+    // },
     lastAddress: {
       handler(newV) {
-        console.log(newV);
+        console.log("🚀 ~ file: AboutView.vue:382 ~ handler ~ newV:", newV);
         if (newV === "" && this.clickMaker) {
           this.clickMaker.hide();
         }
@@ -444,64 +426,52 @@ export default {
       // );
       native.$closeWindow();
     },
-    selectJudgment(item, index) {
-      if (!item.formattedAddress && item.pname) {
-        item.formattedAddress =
-          item.pname + item.cityname + item.adname + item.address + item.name;
-      } else if (!item.formattedAddress) {
-        item.formattedAddress = item.address;
-      }
-      if (
-        this.selectedIndex === index &&
-        item.formattedAddress === this.lastAddress.formattedAddress
-      ) {
-        return true;
-      }
-      return false;
-    },
-    touchStart: function touchStart(event) {
-      this.resetTouchStatus();
-      this.startX = event.touches[0].clientX;
-      this.startY = event.touches[0].clientY;
-    },
-    touchMove: function touchMove(event) {
-      // console.log(this.$refs.scrollBoxDom);
-      const touch = event.touches[0]; // safari back will set clientX to negative number
+    afterGetCenter(data, userNative) {
+      let province = "";
 
-      this.deltaX = touch.clientX < 0 ? 0 : touch.clientX - this.startX;
-      this.deltaY = touch.clientY - this.startY;
-      this.offsetX = Math.abs(this.deltaX);
-      this.offsetY = Math.abs(this.deltaY);
-
-      const LOCK_DIRECTION_DISTANCE = 10;
-
-      if (
-        !this.direction ||
-        (this.offsetX < LOCK_DIRECTION_DISTANCE &&
-          this.offsetY < LOCK_DIRECTION_DISTANCE)
-      ) {
-        this.direction = getDirection(this.offsetX, this.offsetY);
+      if (!userNative) {
+        province = data.addressComponent.province;
+        this.center = [data.position.lng, data.position.lat];
+        this.lastPoint = [data.position.lng, data.position.lat];
+      } else {
+        province = data.province;
+        data.formattedAddress = data.address;
+        this.center = [data.Longitude, data.Latitude];
+        this.lastPoint = [data.Longitude, data.Latitude];
       }
+      this.addNowPostion(this.center);
+      this.addClickMarker(this.center);
 
-      if (this.deltaY <= 0 && this.direction === "vertical") {
-        // console.log("上");
-        this.listH = 100 - this.listPercentage;
-      } else if (
-        this.deltaY > 0 &&
-        this.direction === "vertical" &&
-        this.$refs.scrollBoxDom.scrollTop < 1
-      ) {
-        // console.log("下");
-        this.listH = this.listPercentage;
+      this.nowLocal = data;
+      this.nowLocal.formattedAddress = data.formattedAddress.replace(
+        province,
+        ""
+      );
+
+      this.lastAddress = data;
+      if (userNative) {
+        this.addNowPostion(this.center);
       }
+      if (!this.MAP) {
+        this.MAP = this.amapManager.getMap(); // 获取地图组件实例
+        const timer = setInterval(() => {
+          if (window.document.querySelector(".amap-geo")) {
+            window.document
+              .querySelector(".amap-geo")
+              .addEventListener("click", () => {
+                this.searchValue = "";
+                this.loading = true;
+                this.darkMarkFullScreen = true;
+              });
+            clearInterval(timer);
+          }
+        }, 500);
+      }
+      this.listH = this.listPercentage;
+
+      this.searchNearLocal({ keyWord: "", init: 1 });
     },
-    resetTouchStatus: function resetTouchStatus() {
-      this.direction = "";
-      this.deltaX = 0;
-      this.deltaY = 0;
-      this.offsetX = 0;
-      this.offsetY = 0;
-    },
+
     addNowPostion(position) {
       // 创建一个 Marker 实例：
       // new AMap.Marker({
@@ -514,7 +484,7 @@ export default {
         this.blueCircle = new AMap.Circle({
           map: this.amapManager.getMap(),
           center: new AMap.LngLat(...position),
-          bubble: true,
+          bubble: false,
           radius: 500,
           strokeColor: "#3285ff",
           strokeOpacity: 0.1,
@@ -538,42 +508,34 @@ export default {
       const text = `您在 [ ${e.lnglat.getLng()},${e.lnglat.getLat()} ] 的位置点击了marker！`;
       console.log(text);
       // let that = this;
-      this.addClickMarker([e.lnglat.getLng(), e.lnglat.getLat()]);
       // console.log(e);
       this.searchValue = "";
-      this.lastPoint = [e.lnglat.getLng(), e.lnglat.getLat()];
 
+      this.addClickMarker([e.lnglat.getLng(), e.lnglat.getLat()], true);
+    },
+    geocoderGetAddress(pos) {
+      // [e.lnglat.getLng(), e.lnglat.getLat()]
       var geocoder = new window.AMap.Geocoder();
       let that = this;
-      that.searchNearLocal({
-        keyWord: "",
-        point: [e.lnglat.getLng(), e.lnglat.getLat()],
-        init: 1,
-        from: "click",
-      });
-      geocoder.getAddress(
-        [e.lnglat.getLng(), e.lnglat.getLat()],
-        function (status, result) {
-          console.log(status, result);
-          if (status === "complete" && result.regeocode) {
-            console.log(status, result);
-            that.nowLocal = {}; //result.regeocode
-            that.nowLocal.adcode = 1;
-            that.nowLocal.formattedAddress = result.regeocode.formattedAddress;
-            // that.nowLocal.location = [e.lnglat.getLng(), e.lnglat.getLat()];
-
-            // that.nowLocal.distance = AMap.GeometryUtil.distance(
-            //         that.center,
-            //         [e.lnglat.getLng(), e.lnglat.getLat()]
-            //       ).toFixed();
-            // var address = result.regeocode.formattedAddress;
-            // document.getElementById("address").value = address;
-          } else {
-            console.log("根据经纬度查询地址失败");
-          }
+      geocoder.getAddress(pos, function (status, result) {
+        console.log(status, result);
+        if (status === "complete" && result.regeocode) {
+          // console.log(status, result);
+          that.nowLocal = {}; //result.regeocode
+          that.nowLocal.adcode = 1;
+          that.nowLocal.position = pos;
+          that.nowLocal.formattedAddress =
+            result.regeocode.formattedAddress.replace(
+              result.regeocode.addressComponent.province,
+              ""
+            );
+          that.lastAddress = that.nowLocal;
+        } else {
+          console.log("根据经纬度查询地址失败");
         }
-      );
+      });
     },
+
     searchNearLocal({ keyWord, point, init, from }) {
       // if (this.queryStatus !== "complete") {
       //   this.cacheParam = { keyWord, point, init };
@@ -610,6 +572,16 @@ export default {
           ? that.clickRadius
           : that.centerRadius; /* [e.lnglat.getLng(), e.lnglat.getLat()]; */ // 中心点坐标
         that.loading = true;
+        // console.log(
+        //   "搜索关键词",
+        //   keyWord,
+        //   "\n",
+        //   "坐标",
+        //   cpoint,
+        //   "\n",
+        //   "范围",
+        //   radio
+        // );
         that.placeSearch.searchNearBy(
           keyWord,
           cpoint,
@@ -701,8 +673,13 @@ export default {
       });
     },
     searchBarFn() {
-      this.lastPoint = this.center;
-      this.searchNearLocal({ keyWord: this.searchValue, init: 1 });
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        if (!this.searchValue) return;
+        this.lastPoint = this.center;
+        this.searchNearLocal({ keyWord: this.searchValue, init: 1 });
+      }, 500);
+
       // this.placeSearch.searchInBounds(
       //   this.searchValue,
       //   this.blueCircle,
@@ -711,46 +688,46 @@ export default {
       //   }
       // );
     },
-    addMarkerList() {
-      // 批量标记
-      const that = this;
-      function createContent(poi) {
-        // 信息窗体内容
-        const s = [];
-        s.push(`<b>名称：${poi.name}</b>`);
-        s.push(`地址：${poi.address}`);
-        s.push(`电话：${poi.tel}`);
-        s.push(`类型：${poi.type}`);
-        return s.join("<br>");
-      }
-      this.aroundList.forEach((item, index) => {
-        this.markerList[index] = new AMap.Marker({
-          map: that.amapManager.getMap(),
-          position: item.location,
-          // icon:
-          //   "https://webapi.amap.com/theme/v1.3/markers/n/mark_b" +
-          //   (index + 1) +
-          //   ".png",
-        });
-        this.markerList[index].on("click", () => {
-          this.markerInfoList[index].open(
-            that.amapManager.getMap(),
-            item.location
-          );
-          console.log(item);
-        });
-        this.markerInfoList[index] = new AMap.InfoWindow({
-          autoMove: true,
-          offset: { x: 0, y: -30 },
-        });
-        this.markerInfoList[index].setContent(createContent(item));
-      });
-    },
-    addClickMarker(position) {
+    // addMarkerList() {
+    //   // 批量标记
+    //   const that = this;
+    //   function createContent(poi) {
+    //     // 信息窗体内容
+    //     const s = [];
+    //     s.push(`<b>名称：${poi.name}</b>`);
+    //     s.push(`地址：${poi.address}`);
+    //     s.push(`电话：${poi.tel}`);
+    //     s.push(`类型：${poi.type}`);
+    //     return s.join("<br>");
+    //   }
+    //   this.aroundList.forEach((item, index) => {
+    //     this.markerList[index] = new AMap.Marker({
+    //       map: that.amapManager.getMap(),
+    //       position: item.location,
+    //       // icon:
+    //       //   "https://webapi.amap.com/theme/v1.3/markers/n/mark_b" +
+    //       //   (index + 1) +
+    //       //   ".png",
+    //     });
+    //     this.markerList[index].on("click", () => {
+    //       this.markerInfoList[index].open(
+    //         that.amapManager.getMap(),
+    //         item.location
+    //       );
+    //       console.log(item);
+    //     });
+    //     this.markerInfoList[index] = new AMap.InfoWindow({
+    //       autoMove: true,
+    //       offset: { x: 0, y: -30 },
+    //     });
+    //     this.markerInfoList[index].setContent(createContent(item));
+    //   });
+    // },
+    addClickMarker(position, needSearch) {
       console.log("点标记执行");
       const that = this;
+      this.lastPoint = position;
       let AMap = window.AMap;
-
       if (!this.clickMaker) {
         this.clickMaker = new AMap.Marker({
           map: that.amapManager.getMap(),
@@ -765,21 +742,26 @@ export default {
             // imageOffset: new AMap.Pixel(-9, -3),
           }),
         });
-        // const timer = setInterval(() => {
-        //   if (
-        //     window.document.querySelectorAll('.amap-marker').length > 0
-        //   ) {
-        //     const domList = window.document.querySelectorAll('.amap-marker');
-        //     domList.forEach((ele) => {
-        //       ele.style.pointerEvents = 'none';
-        //     });
-        //     clearInterval(timer);
-        //   }
-        // }, 500);
       } else {
+        console.log("看看中心点", this.clickMaker.getPosition());
         this.clickMaker.show();
         console.log(this.clickMaker);
-        this.clickMaker.moveTo(new AMap.LngLat(...position), 3600);
+        this.MAP.setCenter(new AMap.LngLat(...position));
+        this.clickMaker.moveTo(new AMap.LngLat(...position), 36000);
+      }
+      if (needSearch) {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => {
+          if (JSON.stringify(this.center) !== JSON.stringify(position)) {
+            this.geocoderGetAddress(position);
+          }
+          that.searchNearLocal({
+            keyWord: "",
+            point: position,
+            init: 1,
+            from: "click",
+          });
+        }, 200);
       }
     },
     addCenterMarker(position) {
@@ -807,9 +789,12 @@ export default {
     },
     listClick(item, index) {
       console.log("🚀 ~ file: AboutView.vue:707 ~ listClick ~ item:", item);
+      let clickPos = item.position || item.location;
       this.selectedIndex = index;
       this.lastAddress = item;
-      this.clickMaker.moveTo(item.position || item.location, 3600);
+      this.clickMaker.show();
+      this.MAP.setCenter(clickPos);
+      this.clickMaker.moveTo(clickPos, 3600);
     },
     cancelFn() {
       this.searchValue = "";
@@ -820,6 +805,64 @@ export default {
 
       // window.document.querySelector(".amap-geo").click();
     },
+    selectJudgment(item, index) {
+      if (!item.formattedAddress && item.pname) {
+        item.formattedAddress =
+          item.pname + item.cityname + item.adname + item.address + item.name;
+      } else if (!item.formattedAddress) {
+        item.formattedAddress = item.address;
+      }
+      if (
+        this.selectedIndex === index &&
+        item.formattedAddress === this.lastAddress.formattedAddress
+      ) {
+        return true;
+      }
+      return false;
+    },
+    touchStart: function touchStart(event) {
+      this.resetTouchStatus();
+      this.startX = event.touches[0].clientX;
+      this.startY = event.touches[0].clientY;
+    },
+    touchMove: function touchMove(event) {
+      // console.log(this.$refs.scrollBoxDom);
+      const touch = event.touches[0]; // safari back will set clientX to negative number
+
+      this.deltaX = touch.clientX < 0 ? 0 : touch.clientX - this.startX;
+      this.deltaY = touch.clientY - this.startY;
+      this.offsetX = Math.abs(this.deltaX);
+      this.offsetY = Math.abs(this.deltaY);
+
+      const LOCK_DIRECTION_DISTANCE = 10;
+
+      if (
+        !this.direction ||
+        (this.offsetX < LOCK_DIRECTION_DISTANCE &&
+          this.offsetY < LOCK_DIRECTION_DISTANCE)
+      ) {
+        this.direction = getDirection(this.offsetX, this.offsetY);
+      }
+
+      if (this.deltaY <= 0 && this.direction === "vertical") {
+        // console.log("上");
+        this.listH = 100 - this.listPercentage;
+      } else if (
+        this.deltaY > 0 &&
+        this.direction === "vertical" &&
+        this.$refs.scrollBoxDom.scrollTop < 1
+      ) {
+        // console.log("下");
+        this.listH = this.listPercentage;
+      }
+    },
+    resetTouchStatus: function resetTouchStatus() {
+      this.direction = "";
+      this.deltaX = 0;
+      this.deltaY = 0;
+      this.offsetX = 0;
+      this.offsetY = 0;
+    },
     searchFocusFn() {
       this.listH = 100 - this.listPercentage;
       this.cancelBtnShow = true;
@@ -828,7 +871,7 @@ export default {
       this.aroundList = [];
     },
     searchBlurFn() {
-      this.clickMaker.show();
+      // this.clickMaker.show();
 
       setTimeout(() => {
         if (!this.searchValue) {
@@ -836,23 +879,6 @@ export default {
         }
       }, 100);
     },
-    // changeH(e) {
-    //   // this.lockForchangeH = true;
-    //   // clearTimeout(this.timer);
-    //   // this.timer = setTimeout(() => {
-    //   //   this.lockForchangeH = false;
-    //   // }, 200);
-    //   // if (this.lockForchangeH) return;
-    //   console.log(e, e.target.scrollTop);
-    //   if (e.target.scrollTop && this.listH !== 70) {
-    //     // clearTimeout(this.timer);
-    //     // this.timer = setTimeout(() => {
-    //     this.listH = 70;
-    //     // }, 200);
-    //   } else if (e.target.scrollTop < 1 && this.listH !== 30) {
-    //     this.listH = 30;
-    //   }
-    // },
   },
 };
 </script>
@@ -1038,6 +1064,7 @@ div {
   height: 100%;
 
   .listItem {
+    position: relative;
     height: 77px;
     border-bottom: 1px #eee solid;
     padding: 12px 0 0 16px;
